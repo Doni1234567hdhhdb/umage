@@ -1,29 +1,139 @@
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
-<input type="checkbox" id="switch" onchange="sendStatus()"> ON/OFF
-
-<script>
-  const client = mqtt.connect('wss://7dca25680bd841b5ae94a4572133f561.s1.eu.hivemq.cloud:8884/mqtt', {
-    username: "Mas_JP",
-    password: "MasJP2509"
-  });
-
-  const topic = "control/button1";
-  const switchEl = document.getElementById("switch");
-
-  client.on('connect', () => {
-    console.log("Connected");
-    client.subscribe(topic);
-  });
-
-  client.on('message', (t, msg) => {
-    if (t === topic) {
-      switchEl.checked = msg.toString() === "ON";
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Greenhouse Dashboard</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #f0f0f0;
     }
-  });
+    h1 {
+      color: #2a7a2a;
+    }
+    .sensor-box {
+      background: white;
+      display: inline-block;
+      padding: 20px;
+      margin: 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+      margin: 10px;
+    }
+    .switch input { display: none; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0;
+      right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px; width: 26px;
+      left: 4px; bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #4CAF50;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .label {
+      font-weight: bold;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Greenhouse Dashboard</h1>
 
-  function sendStatus() {
-    const status = switchEl.checked ? "ON" : "OFF";
-    client.publish(topic, status);
-  }
-</script>
+  <div class="sensor-box">
+    <h3>Suhu: <span id="suhu">--</span> °C</h3>
+    <h3>Kelembaban Udara: <span id="lembab">--</span> %</h3>
+    <h3>Kelembaban Tanah: <span id="tanah">--</span> %</h3>
+  </div>
+
+  <div class="sensor-box">
+    <h3>Kontrol Relay</h3>
+
+    <div>
+      <label class="label">Blower</label><br>
+      <label class="switch">
+        <input type="checkbox" data-relay="RELAY1" onchange="toggleRelay('RELAY1', this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div>
+      <label class="label">Lampu</label><br>
+      <label class="switch">
+        <input type="checkbox" data-relay="RELAY2" onchange="toggleRelay('RELAY2', this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div>
+      <label class="label">Pompa</label><br>
+      <label class="switch">
+        <input type="checkbox" data-relay="RELAY3" onchange="toggleRelay('RELAY3', this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <script>
+    // Konfigurasi MQTT WebSocket
+    const broker = 'wss://d9b9c20b49c94846908c7c679ee4d246.s1.eu.hivemq.cloud:8884/mqtt';
+    const options = {
+      username: "greenhouse",
+      password: "Gh12345678",
+      clientId: "WebClient_" + Math.random().toString(16).substr(2, 8)
+    };
+
+    const client = mqtt.connect(broker, options);
+
+    client.on('connect', () => {
+      console.log('Connected to MQTT Broker');
+      client.subscribe('GREENHOUSE_RPB/DATA');
+      client.subscribe('GREENHOUSE_RPB/RELAY1');
+      client.subscribe('GREENHOUSE_RPB/RELAY2');
+      client.subscribe('GREENHOUSE_RPB/RELAY3');
+    });
+
+    client.on('message', (topic, message) => {
+      const msg = message.toString();
+
+      if (topic === 'GREENHOUSE_RPB/DATA') {
+        const data = JSON.parse(msg);
+        document.getElementById('suhu').textContent = data.suhu;
+        document.getElementById('lembab').textContent = data.lembab;
+        document.getElementById('tanah').textContent = data.tanah;
+      } else if (topic.startsWith('GREENHOUSE_RPB/RELAY')) {
+        const relay = topic.split('/')[1];
+        const isChecked = msg === 'on';
+        const checkbox = document.querySelector(`input[data-relay="${relay}"]`);
+        if (checkbox) checkbox.checked = isChecked;
+      }
+    });
+
+    function toggleRelay(relay, element) {
+      const state = element.checked ? 'on' : 'off';
+      client.publish(`GREENHOUSE_RPB/${relay}`, state);
+    }
+  </script>
+</body>
+  </html>
